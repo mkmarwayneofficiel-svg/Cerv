@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IFSM — Gestion Présences & Notes (Firestore)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+    :root{
+        --blue:#3498db; --green:#4CAF50; --muted:#f5f6fa; --card:#fff; --accent:#ffb500;
+    }
+    *{box-sizing:border-box;font-family:Inter, Arial, sans-serif;}
+    body{margin:0;background:var(--muted);color:#222}
+    header{background:linear-gradient(90deg,var(--blue),#2a88c9);color:#fff;padding:18px 16px;display:flex;align-items:center;gap:12px}
+    header h1{margin:0;font-size:18px}
+    header nav{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .container{max-width:1100px;margin:18px auto;padding:12px}
+    .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(15,15,15,0.06);margin-bottom:12px}
+    .grid{display:grid;gap:8px}
+    .row{display:flex;gap:8px}
+    input,select,textarea,button{font-family:inherit}
+    input[type=text],input[type=date],input[type=time],select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;margin-top:6px}
+    button{padding:8px 12px;border-radius:8px;border:0;background:var(--blue);color:#fff;cursor:pointer}
+    button.gray{background:#777}
+    .small-input{width:90px;padding:6px;border-radius:6px;border:1px solid #ddd}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:center;font-size:14px}
+    th{background:#fafafa}
+    .tabs{display:flex;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 8px rgba(0,0,0,0.04)}
+    .tabs button{flex:1;padding:12px;border:0;background:#f0f3f6;cursor:pointer}
+    .tabs button.active{background:var(--blue);color:#fff}
+    .hide{display:none!important}
+    .muted{color:#666;font-size:13px}
+    .badge{display:inline-block;padding:6px 8px;border-radius:999px;background:#eee;font-weight:600}
+    .claim-card{border-left:4px solid var(--accent);padding:10px;border-radius:6px;background:#fff;margin-bottom:8px}
+    footer{padding:10px;text-align:center;color:#555;font-size:14px}
+    .back-btn{position:fixed;right:12px;bottom:12px;padding:10px;border-radius:10px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.12);cursor:pointer}
+    .top-row{display:flex;gap:12px;align-items:center}
+    /* responsive */
+    @media(max-width:720px){
+        header{padding:14px}
+        .row{flex-direction:column}
+        th,td{font-size:13px;padding:6px}
+        .back-btn{right:8px;bottom:8px;padding:8px}
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <div style="display:flex;gap:10px;align-items:center">
+        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34'><rect rx='6' width='100%' height='100%' fill='%23ffffff' opacity='0.15'/><text x='50%' y='55%' font-size='14' text-anchor='middle' fill='white' font-family='Arial'>IFSM</text></svg>" alt="logo" style="height:34px;width:34px;border-radius:6px"/>
+        <h1>IFSM — Gestion Présences & Notes</h1>
+    </div>
+
+    <nav>
+        <div id="userBadge" style="display:none;align-items:center;gap:8px">
+            <span class="muted" id="loggedAs"></span>
+            <button id="monCompteBtn" class="gray">Mon compte</button>
+            <button id="logoutBtn" class="gray">Déconnexion</button>
+        </div>
+        <button id="loginOpenBtn" style="display:inline-block">Se connecter</button>
+    </nav>
+</header>
+
+<div class="container">
+
+    <!-- ===== PAGE D'ACCUEIL / LOGIN ===== -->
+    <div id="landing" class="card">
+        <h2 style="margin:0 0 8px 0">Page d'accueil — IFSM</h2>
+        <p class="muted">Design scolaire — Choisis ton type d'utilisateur et connecte-toi.</p>
+
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button onclick="openLogin('eleve')">Élève</button>
+            <button onclick="openLogin('parent')">Parent d'élève</button>
+            <button onclick="openLogin('enseignant')">Enseignant</button>
+            <button onclick="openLogin('admin')">Administratif</button>
+        </div>
+
+        <hr style="margin:12px 0">
+
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div style="flex:1">
+                <div class="muted">Matières disponibles :</div>
+                <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+                    <span class="badge">Maths</span>
+                    <span class="badge">Merise</span>
+                    <span class="badge">Anglais</span>
+                    <span class="badge">Algo & Web</span>
+                    <span class="badge">Réseaux tele-informatiques</span>
+                    <span class="badge">Droit</span>
+                </div>
+            </div>
+            <div style="width:280px">
+                <div class="muted">Administration — code spécial :</div>
+                <div style="margin-top:8px"><strong>1357</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== LOGIN MODAL / PANEL ===== -->
+    <div id="loginPanel" class="card hide">
+        <h3 id="loginTitle">Connexion</h3>
+        <div style="margin-top:8px">
+            <label>Type d'utilisateur</label>
+            <select id="loginRole" onchange="loginRoleChanged()">
+                <option value="eleve">Élève</option>
+                <option value="parent">Parent d'élève</option>
+                <option value="enseignant">Enseignant</option>
+                <option value="admin">Administratif</option>
+            </select>
+
+            <label style="margin-top:8px" id="labelCode">Code de connexion</label>
+            <input type="text" id="loginCode" placeholder="Ex: code élève ou code enseignant">
+            
+            <div id="teacherChoose" style="display:none;margin-top:8px">
+                <label>Choisis la matière (obligatoire pour enseignant)</label>
+                <select id="teacherSubject">
+                    <option>Maths</option>
+                    <option>Merise</option>
+                    <option>Anglais</option>
+                    <option>Algo & Web</option>
+                    <option>Réseaux tele-informatiques</option>
+                    <option>Droit</option>
+                </select>
+
+                <label style="margin-top:8px">Choisis la classe (obligatoire)</label>
+                <select id="teacherClass"></select>
+            </div>
+
+            <div style="margin-top:10px;display:flex;gap:8px;">
+                <button onclick="doLogin()">Se connecter</button>
+                <button class="gray" onclick="closeLogin()">Annuler</button>
+            </div>
+
+            <p class="muted" style="margin-top:10px">Si tu n'as pas de code, contacte l'administration. Les codes élèves/parents affichés localement sont générés automatiquement (tu peux les modifier dans le code si tu veux).</p>
+        </div>
+    </div>
+
+    <!-- ===== APPLICATION PAGES (tabs) ===== -->
+    <div id="appArea" class="hide">
+
+        <div class="tabs card" style="margin-bottom:12px">
+            <button id="tabGestion" onclick="switchTab('gestion')">Gestion</button>
+            <button id="tabResume" onclick="switchTab('resume')">Résumé</button>
+            <button id="tabInterro" onclick="switchTab('interro')">Interrogations</button>
+            <button id="tabDevoir" onclick="switchTab('devoir')">Devoirs</button>
+            <button id="tabRevend" onclick="switchTab('revend')">Revendi. <span id="notifBadge" style="margin-left:6px;background:#ff4d4d;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;display:none">0</span></button>
+        </div>
+
+        <!-- GESTION (visible seulement aux profs avec permissions) -->
+        <div id="pageGestion" class="card hide">
+            <h2>Gestion — Absences & Notes</h2>
+
+            <div id="profControls" class="row">
+                <div style="flex:1">
+                    <label>Matière</label>
+                    <select id="gestionMatiere"></select>
+                </div>
+                <div style="flex:1">
+                    <label>Classe</label>
+                    <select id="gestionClasse"></select>
+                </div>
+                <div style="flex:1">
+                    <label>Date</label>
+                    <input type="date" id="gestionDate">
+                </div>
+                <div style="flex:1">
+                    <label>Heure début</label>
+                    <input type="time" id="gestionHd">
+                </div>
+                <div style="flex:1">
+                    <label>Heure fin</label>
+                    <input type="time" id="gestionHf">
+                </div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:10px">
+                <button id="btnCharger" onclick="loadAttendance()">Charger</button>
+                <button id="btnTout" class="gray" onclick="markAll()">Tout cocher (absents)</button>
+            </div>
+
+            <div id="studentsTableWrap" style="margin-top:10px">
+                <table id="studentsTable" style="min-width:320px"></table>
+            </div>
+        </div>
+
+        <!-- RESUME (visible pour tous ; filtered per role) -->
+        <div id="pageResume" class="card hide">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <h2>Résumé</h2>
+                <div>
+                    <select id="resumeClassSelect" style="display:none" onchange="afficherResume()"></select>
+                </div>
+            </div>
+
+            <div id="resumeArea" style="margin-top:10px"></div>
+
+            <hr>
+            <h3>Tableau des Notes générales</h3>
+            <table id="tableNotes" border="1">
+                <thead>
+                    <tr><th>Élève</th><th>Matière</th><th>Note</th><th>Date</th><th>Heure</th><th>Ajouté le</th><th>Classe</th><th>Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <h3 style="margin-top:10px">Tableau Interrogations</h3>
+            <table id="tableInterros" border="1">
+                <thead>
+                    <tr><th>Élève</th><th>Matière</th><th>Note</th><th>Date</th><th>Heure</th><th>Ajouté le</th><th>Classe</th><th>Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <h3 style="margin-top:10px">Tableau Devoirs</h3>
+            <table id="tableDevoirs" border="1">
+                <thead>
+                    <tr><th>Élève</th><th>Matière</th><th>Note</th><th>Date</th><th>Heure</th><th>Ajouté le</th><th>Classe</th><th>Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- INTERRO (gestion & add) -->
+        <div id="pageInterro" class="card hide">
+            <h2>Interrogations</h2>
+            <div class="muted">Ajout / gestion d'interros — accessible seulement pour l'enseignant autorisé pour sa matière.</div>
+
+            <div id="interroPanel" style="margin-top:8px"></div>
+            <table id="interroList" border="1"><thead><tr><th>Élève</th><th>Note</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <!-- DEVOIRS -->
+        <div id="pageDevoir" class="card hide">
+            <h2>Devoirs</h2>
+            <div id="devoirPanel" style="margin-top:8px"></div>
+            <table id="devoirList" border="1"><thead><tr><th>Élève</th><th>Note</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <!-- REVENDICATIONS -->
+        <div id="pageRevend" class="card hide">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <h2>Réclamations / Revendications</h2>
+                <div id="revendFilter" style="display:flex;gap:8px;align-items:center">
+                    <select id="revendSubject" style="display:none">
+                        <option value="">Toutes matières</option>
+                        <option>Maths</option><option>Merise</option><option>Anglais</option><option>Algo & Web</option><option>Réseaux tele-informatiques</option><option>Droit</option>
+                    </select>
+                    <select id="revendClassFilter" style="display:none"></select>
+                </div>
+            </div>
+
+            <div id="revendArea" style="margin-top:10px"></div>
+        </div>
+
+        <!-- MON COMPTE -->
+        <div id="pageMonCompte" class="card hide">
+            <h2>Mon compte</h2>
+            <div id="accountInfo"></div>
+            <div style="margin-top:10px"><button onclick="doLogout()">Se déconnecter</button></div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Back button (bottom-right) -->
+<button class="back-btn" onclick="goBack()">↩ Retour</button>
+
+<footer>IFSM — Application locale & Firestore (option). ©</footer>
+
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* =========================
+   FIREBASE CONFIG - (TA CONFIG fournie)
+   Remplace/valide si besoin
+   ========================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyAekmm7NadOrMRaNqsp8QjXr2VmyzlSbRY",
+  authDomain: "moctar-8f3ba.firebaseapp.com",
+  projectId: "moctar-8f3ba",
+  storageBucket: "moctar-8f3ba.firebasestorage.app",
+  messagingSenderId: "942675129438",
+  appId: "1:942675129438:web:f802ff9e7f2ac82a5e70cf",
+  measurementId: "G-YRG87WKC29"
+};
+
+/* Init Firestore (compat) */
+let firebaseEnabled = false;
+let db = null;
+try {
+    if (firebaseConfig && firebaseConfig.apiKey) {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        firebaseEnabled = true;
+        console.log("Firestore initialisé.");
+    }
+} catch (e) {
+    console.warn("Erreur init Firestore:", e);
+    firebaseEnabled = false;
+}
+
+/* =========================
+   DONNÉES LOCALES (fallback)
+   =========================
+   Si tu veux remplacer la liste de classes/élèves, modifie `classes` ci-dessous.
+*/
+let classes = {
+    "6e A": {
+        students: ["Moussa Diakité","Madou Ballon","Islam Demba"],
+        absences:{}, notes:[], interros:[], devoirs:[]
+    },
+    "IDA-1A": {
+        students: [
+"AGBANDAN DJO JEAN MARIE VIANNEY","ATTA Ekra Felix Boabre Karim","BAMBA Nakyata","BILEY Ehoule Joseph","BLA Koffi Christ David Nolan Mals","CISSE Begnon Rokia","COULIBALY Bamory","COLLIBALY Kafandja Fatoumats","COULIBALY Yele Korotoum","DIAKITE Alassane","DIAKITE Yassine Ben-Salla","DIALLO Abiba","DIARRA Abdoulaye","DIOMANDE Assata Roseline","DIANI Thiomoo-Kindeinin Saida","DOUMBIA Awa Noura","EBROTIE Kesse Jean Fernand","EHUI Yano- Ephraim","ETTIEN Ekissi Aymeric Canisius","FOFANA Makouny MAN KOLUNY","FOFANA Maman","FOPANA Zoumana","GOMONT Nogbou Abigael Jean-Josué","GUEIDIE Zrampica Franck Samuel","KAMAGATE Yacouba","KAMATE Aboubacar","KEITA Noura Munier Jeanne Stephanie","KINDO Tahirou","KOFFI Amenan Maric Aude","KOFFI Ngouan Jonathan Johka","KONATE Djakaridja Aziz","KONE Aminata","KONE Dognon Zakariah","KONE Moctar","KONE Yassoungo Maimouna","KOUADIO Elohim Excel Wilfried","KOUADIO Koffi Modeste","KOUADIO Ndri Salomon","KOUASSI Jean-Marc Wilfried","KOUKOUGNON Pepin Koudou Didier","KRA Aya Auriane","NANA Fatoumata","NANGO Tanoh Karim Bienvenu","N'GUESSAN Grahon Martine","OKOU Yao Patrick Wilfried","ONYEKWERE Favour Blesing Grace","QUATTARA Ibrahima Ahmed","QUATTARA Maimouna","QUATTARA N'Lodja Kindinnin","OUEDRAOGO Zakaria","OYENIRAN Fatia Aziza Salimatou","SERY Ibrahim","SILUE Kolotcholoma","SYLLA Fatoumata Zahra","SYLLA Gaoussou Abdel Aziz","THIENTA Aboudramane","TOURE Mbegnan Hermane","TOURE Zenab Fatim","TRAH Djo Eden Diplexe","YEBOUE Affouée Esther","ZAN Bi Zan Ange Antonin"
+        ],
+        absences:{}, notes:[], interros:[], devoirs:[]
+    },
+    "7e A": {
+        students: ["Issa Cissé","Junior Bit","Bit"], absences:{}, notes:[], interros:[], devoirs:[]
+    },
+    "10e C": {
+        students: ["Koumba Buti","Jujube Roi","Roi King"], absences:{}, notes:[], interros:[], devoirs:[]
+    }
+};
+
+/* ==== generate studentCodes mapping ==== */
+let studentCodes = {};
+function generateStudentCodes() {
+    studentCodes = {};
+    Object.keys(classes).forEach(cl => {
+        classes[cl].students.forEach((name, idx) => {
+            let initials = cl.split(' ').map(s=>s[0]).join('').replace(/[^A-Z]/g,'') || 'C';
+            initials = initials.substring(0,3).toUpperCase();
+            let code = `${initials}_${String(idx+1).padStart(3,'0')}`;
+            let base = code; let suffix = 1;
+            while (studentCodes[code]) { code = base + '_' + suffix; suffix++; }
+            studentCodes[code] = { class: cl, index: idx, name: name };
+        });
+    });
+}
+generateStudentCodes();
+
+/* teacher codes + admin */
+let teacherCodes = {"Maths":"2468","Merise":"2469","Anglais":"2470","Algo & Web":"2471","Réseaux tele-informatiques":"2472","Droit":"2473"};
+const ADMIN_CODE = "1357";
+
+/* local persistence keys */
+const STORAGE_KEY = 'ifsm_v2_data';
+const CLAIMS_KEY = 'ifsm_claims_v1';
+
+/* save local + try to push snapshot to Firestore */
+function saveLocalAll() {
+    const payload = { classes, studentCodes, teacherCodes, updatedAt: new Date().toISOString() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    if (firebaseEnabled && db) {
+        try {
+            db.collection('ifsm_app_v1').doc('snapshot_local').set(payload).catch(e=>console.warn("push snapshot failed",e));
+        } catch(e) { console.warn("push snapshot exception", e); }
+    }
+}
+
+/* load local; if firestore available load snapshot and merge/replace */
+async function loadLocalAll() {
+    try {
+        let raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            let parsed = JSON.parse(raw);
+            if (parsed.classes) classes = parsed.classes;
+            if (parsed.studentCodes) studentCodes = parsed.studentCodes;
+            if (parsed.teacherCodes) teacherCodes = parsed.teacherCodes;
+        }
+    } catch(e){console.warn("loadLocalAll",e);}
+    // attempt Firestore load (prefer Firestore snapshot if exists)
+    if (firebaseEnabled && db) {
+        try {
+            const snapDoc = await db.collection('ifsm_app_v1').doc('snapshot_local').get();
+            if (snapDoc.exists) {
+                const data = snapDoc.data();
+                if (data && data.classes) {
+                    classes = data.classes;
+                    studentCodes = data.studentCodes || {};
+                    teacherCodes = data.teacherCodes || teacherCodes;
+                    console.log("Chargé snapshot depuis Firestore.");
+                }
+            }
+        } catch(e){ console.warn("load snapshot firestore failed", e); }
+    }
+    generateStudentCodes();
+}
+loadLocalAll();
+
+/* ======= State ======= */
+let currentUser = null;
+let currentTab = 'resume';
+
+/* ======== Helper DOM refs ======= */
+const loginPanel = document.getElementById('loginPanel');
+const landing = document.getElementById('landing');
+const appArea = document.getElementById('appArea');
+const userBadge = document.getElementById('userBadge');
+const loggedAs = document.getElementById('loggedAs');
+const monCompteBtn = document.getElementById('monCompteBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const loginOpenBtn = document.getElementById('loginOpenBtn');
+const notifBadge = document.getElementById('notifBadge');
+
+loginOpenBtn.addEventListener('click', ()=> openLogin('eleve'));
+monCompteBtn.addEventListener('click', ()=> switchTab('moncompte'));
+logoutBtn.addEventListener('click', doLogout);
+
+/* ===== Login UI helpers ===== */
+function openLogin(role) {
+    landing.classList.add('hide');
+    loginPanel.classList.remove('hide');
+    document.getElementById('loginRole').value = role || 'eleve';
+    loginRoleChanged();
+    document.getElementById('loginCode').value = '';
+    document.getElementById('loginTitle').textContent = 'Connexion — ' + (role || 'élève');
+}
+function closeLogin(){
+    loginPanel.classList.add('hide');
+    landing.classList.remove('hide');
+}
+function loginRoleChanged(){
+    const role = document.getElementById('loginRole').value;
+    let teacherChoose = document.getElementById('teacherChoose');
+    teacherChoose.style.display = role === 'enseignant' ? 'block' : 'none';
+    document.getElementById('labelCode').textContent = role === 'admin' ? 'Code administratif' : 'Code de connexion';
+    // fill teacherClass
+    const tClass = document.getElementById('teacherClass');
+    tClass.innerHTML = '';
+    Object.keys(classes).forEach(cl => {
+        let opt = document.createElement('option'); opt.value = cl; opt.textContent = cl; tClass.appendChild(opt);
+    });
+}
+
+/* ===== Login logic (role + code) ===== */
+function doLogin(){
+    const role = document.getElementById('loginRole').value;
+    const code = document.getElementById('loginCode').value.trim();
+    if (!code) return alert("Entre ton code.");
+    // admin
+    if (role === 'admin') {
+        if (code !== ADMIN_CODE) return alert("Code administratif incorrect.");
+        currentUser = { role:'admin', code:ADMIN_CODE, name:'Administratif' };
+        afterLogin();
+        return;
+    }
+    // enseignant
+    if (role === 'enseignant') {
+        const subject = document.getElementById('teacherSubject').value;
+        const chosenClass = document.getElementById('teacherClass').value;
+        if (!subject || !chosenClass) return alert("Choisis la matière et la classe.");
+        if (!teacherCodes[subject] || teacherCodes[subject] !== code) {
+            return alert("Code enseignant incorrect pour la matière sélectionnée.");
+        }
+        currentUser = { role:'enseignant', code:code, name:'Professeur', subject, class: chosenClass };
+        afterLogin();
+        return;
+    }
+    // eleve or parent
+    if (role === 'eleve' || role === 'parent') {
+        if (!studentCodes[code]) return alert("Code élève/parent inconnu. Regarde la liste des codes ou contacte l'administration.");
+        const info = studentCodes[code];
+        currentUser = { role:role, code:code, name:info.name, class:info.class, index:info.index };
+        afterLogin();
+        return;
+    }
+}
+
+/* ===== After login setup ===== */
+function afterLogin(){
+    loginPanel.classList.add('hide');
+    landing.classList.add('hide');
+    appArea.classList.remove('hide');
+    userBadge.style.display = 'flex';
+    loggedAs.textContent = `${currentUser.role.toUpperCase()} • ${currentUser.name || currentUser.code || ''}`;
+    loginOpenBtn.style.display = 'none';
+
+    if (currentUser.role === 'eleve' || currentUser.role === 'parent') {
+        hideTabsExcept(['resume','revend','moncompte']);
+        // nothing extra
+    } else if (currentUser.role === 'enseignant') {
+        hideTabsExcept(['gestion','resume','interro','devoir','revend','moncompte']);
+        prepareTeacherSpace();
+    } else if (currentUser.role === 'admin') {
+        hideTabsExcept(['resume','moncompte']);
+        document.getElementById('resumeClassSelect').style.display = 'inline-block';
+        populateClassSelect('resumeClassSelect');
+        afficherResume();
+    }
+    populateClassSelect('gestionClasse');
+    populateClassSelect('teacherClass');
+    populateClassSelect('revendClassFilter');
+    populateClassSelect('resumeClassSelect');
+    renderAllTables();
+    updateNotifBadge();
+    switchTab('resume');
+    saveLocalAll();
+}
+
+/* ===== Helpers to show/hide tabs ===== */
+function hideTabsExcept(list){
+    const all = {gestion:'tabGestion', resume:'tabResume', interro:'tabInterro', devoir:'tabDevoir', revend:'tabRevend', moncompte:'tabMonCompte'};
+    Object.keys(all).forEach(k=>{
+        const btn = document.getElementById(all[k]);
+        if (btn) btn.style.display = list.includes(k)?'inline-block':'none';
+        const page = document.getElementById('page'+capitalize(k));
+        if (page) page.classList.toggle('hide', !list.includes(k));
+    });
+    // Also hide pages container versions
+    document.getElementById('pageGestion').classList.toggle('hide', !list.includes('gestion'));
+    document.getElementById('pageResume').classList.toggle('hide', !list.includes('resume'));
+    document.getElementById('pageInterro').classList.toggle('hide', !list.includes('interro'));
+    document.getElementById('pageDevoir').classList.toggle('hide', !list.includes('devoir'));
+    document.getElementById('pageRevend').classList.toggle('hide', !list.includes('revend'));
+    document.getElementById('pageMonCompte').classList.toggle('hide', !list.includes('moncompte'));
+}
+
+/* ===== UI helpers ===== */
+function switchTab(key){
+    currentTab = key;
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+    const map = {gestion:'tabGestion', resume:'tabResume', interro:'tabInterro', devoir:'tabDevoir', revend:'tabRevend', moncompte:'tabMonCompte'};
+    if (map[key]) {
+        const el = document.getElementById(map[key]);
+        if (el) el.classList.add('active');
+    }
+    document.getElementById('pageGestion').classList.toggle('hide', key!=='gestion');
+    document.getElementById('pageResume').classList.toggle('hide', key!=='resume');
+    document.getElementById('pageInterro').classList.toggle('hide', key!=='interro');
+    document.getElementById('pageDevoir').classList.toggle('hide', key!=='devoir');
+    document.getElementById('pageRevend').classList.toggle('hide', key!=='revend');
+    document.getElementById('pageMonCompte').classList.toggle('hide', key!=='moncompte');
+
+    if (key === 'resume') { afficherResume(); renderAllTables(); }
+    if (key === 'gestion') { renderGestionPage(); }
+    if (key === 'interro') { renderInterroPage(); }
+    if (key === 'devoir') { renderDevoirPage(); }
+    if (key === 'revend') { renderRevendArea(); }
+    if (key === 'moncompte') { renderMonCompte(); }
+}
+
+/* render Mon compte */
+function renderMonCompte(){
+    const el = document.getElementById('accountInfo');
+    el.innerHTML = `<div><strong>Rôle :</strong> ${currentUser.role}</div>
+                    <div><strong>Nom :</strong> ${currentUser.name || '-'}</div>
+                    <div><strong>Code :</strong> ${currentUser.code}</div>
+                    <div><strong>Classe :</strong> ${currentUser.class || '-'}</div>
+                    <div><strong>Matière :</strong> ${currentUser.subject || '-'}</div>`;
+}
+
+/* prepare teacher space restrictions */
+function prepareTeacherSpace(){
+    document.getElementById('gestionMatiere').innerHTML = `<option>${currentUser.subject}</option>`;
+    document.getElementById('gestionClasse').value = currentUser.class;
+}
+
+/* populate classes select */
+function populateClassSelect(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.innerHTML = '';
+    Object.keys(classes).forEach(cl => {
+        const opt = document.createElement('option'); opt.value = cl; opt.textContent = cl; el.appendChild(opt);
+    });
+}
+
+/* afficherResume */
+function afficherResume() {
+    const zone = document.getElementById('resumeArea');
+    zone.innerHTML = '';
+    if (currentUser && currentUser.role === 'admin') {
+        const sel = document.getElementById('resumeClassSelect');
+        const chosen = sel.value || Object.keys(classes)[0];
+        if (!chosen) { zone.innerHTML = "<p>Aucune classe.</p>"; return; }
+        const cls = classes[chosen];
+        zone.innerHTML = `<div class="card"><strong>Classe:</strong> ${chosen} — ${cls.students.length} élèves</div>`;
+        for (let key in cls.absences) {
+            const parts = key.split('_'); const date = parts[0], hours = parts[1], mat = parts[2];
+            const list = (cls.absences[key] || []).map(i=>cls.students[i-1]).join(', ');
+            const block = document.createElement('div'); block.className='claim-card';
+            block.innerHTML = `<div><strong>📅 ${date}</strong> — ${mat}</div><div class="muted">Heure: ${hours}</div><div><strong>Absents:</strong> ${list||'<i>Aucun</i>'}</div>`;
+            zone.appendChild(block);
+        }
+        return;
+    }
+    if (currentUser && (currentUser.role === 'eleve' || currentUser.role === 'parent')) {
+        const clsObj = classes[currentUser.class];
+        zone.innerHTML = `<div class='card'><strong>${currentUser.name}</strong><div class='muted'>Classe: ${currentUser.class}</div></div>`;
+        const absBlocks = document.createElement('div');
+        absBlocks.innerHTML = '<h4>Absences</h4>';
+        let foundAbs = false;
+        Object.keys(clsObj.absences).forEach(key=>{
+            const parts = key.split('_'); const date=parts[0], hours=parts[1], mat=parts[2];
+            const arr = clsObj.absences[key] || [];
+            if (arr.includes(currentUser.index+1)) {
+                foundAbs = true;
+                const div = document.createElement('div'); div.className='claim-card';
+                div.innerHTML = `<div>📅 ${date} — ${mat}</div><div class="muted">Heure: ${hours}</div>`;
+                absBlocks.appendChild(div);
+            }
+        });
+        if (!foundAbs) absBlocks.innerHTML += '<div class="muted">Aucune absence enregistrée pour cet élève.</div>';
+        zone.appendChild(absBlocks);
+        return;
+    }
+    if (currentUser && currentUser.role === 'enseignant') {
+        const cls = classes[currentUser.class];
+        zone.innerHTML = `<div class='card'><strong>Prof. ${currentUser.subject}</strong> — Classe: ${currentUser.class}</div>`;
+        let found = false;
+        const notesDiv = document.createElement('div'); notesDiv.innerHTML = '<h4>Notes générales (pour votre matière)</h4>';
+        (cls.notes||[]).forEach(n=>{
+            if (n.matiere === currentUser.subject) {
+                found=true;
+                const row = document.createElement('div'); row.className='claim-card';
+                row.innerHTML = `<div><strong>${n.nom}</strong> — ${n.noteValue}</div><div class="muted">${n.dateSeance} • ${n.heureSeance}</div>`;
+                notesDiv.appendChild(row);
+            }
+        });
+        if (!found) notesDiv.innerHTML += '<div class="muted">Aucune note pour votre matière dans cette classe.</div>';
+        zone.appendChild(notesDiv);
+
+        const absDiv = document.createElement('div'); absDiv.innerHTML = '<h4>Absences (pour votre matière)</h4>';
+        let foundAbs=false;
+        Object.keys(cls.absences).forEach(key=>{
+            const parts = key.split('_'); const date=parts[0], hours=parts[1], mat=parts[2];
+            if (mat !== currentUser.subject) return;
+            foundAbs=true;
+            const list = (cls.absences[key]||[]).map(id=>cls.students[id-1]).join(', ');
+            const block = document.createElement('div'); block.className='claim-card';
+            block.innerHTML = `<div>📅 ${date}</div><div class="muted">Heure: ${hours}</div><div><strong>Absents:</strong> ${list||'<i>Aucun</i>'}</div>`;
+            absDiv.appendChild(block);
+        });
+        if (!foundAbs) absDiv.innerHTML += '<div class="muted">Aucune absence pour votre matière.</div>';
+        zone.appendChild(absDiv);
+        return;
+    }
+}
+
+/* Render tables */
+function renderAllTables(){
+    renderNotesTable();
+    renderInterrosTable();
+    renderDevoirsTable();
+}
+function renderNotesTable(){
+    const tbody = document.querySelector("#tableNotes tbody"); tbody.innerHTML = '';
+    let rows=[];
+    if (currentUser && currentUser.role === 'eleve') {
+        Object.keys(classes).forEach(cl=>{
+            classes[cl].notes.forEach((r, idx)=>{
+                const info = studentCodes[currentUser.code];
+                if (r.nom === currentUser.name && info && info.class === cl) rows.push({...r, _class:cl, _index:idx});
+            });
+        });
+    } else if (currentUser && currentUser.role === 'parent') {
+        Object.keys(classes).forEach(cl=>{
+            classes[cl].notes.forEach((r, idx)=>{
+                const info = studentCodes[currentUser.code];
+                if (r.nom === currentUser.name && info && info.class === cl) rows.push({...r, _class:cl, _index:idx});
+            });
+        });
+    } else if (currentUser && currentUser.role === 'enseignant') {
+        let cls = classes[currentUser.class];
+        (cls.notes||[]).forEach((r,idx)=>{ if (r.matiere === currentUser.subject) rows.push({...r,_class:currentUser.class,_index:idx}); });
+    } else if (currentUser && currentUser.role === 'admin') {
+        Object.keys(classes).forEach(cl=> { classes[cl].notes.forEach((r,idx)=>rows.push({...r,_class:cl,_index:idx})); });
+    } else {
+        Object.keys(classes).forEach(cl=> { classes[cl].notes.forEach((r,idx)=>rows.push({...r,_class:cl,_index:idx})); });
+    }
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8"><i>Aucune note enregistrée.</i></td></tr>';
+        return;
+    }
+    rows.forEach(n=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left;padding-left:8px">${escapeHtml(n.nom)}</td>
+            <td>${escapeHtml(n.matiere)}</td>
+            <td>${escapeHtml(n.noteValue)}</td>
+            <td>${escapeHtml(n.dateSeance)}</td>
+            <td>${escapeHtml(n.heureSeance)}</td>
+            <td>${escapeHtml(n.addedAt)}</td>
+            <td>${escapeHtml(n._class)}</td>
+            <td>
+                ${canModify('notes') ? `<button class="gray" onclick="editNote('${escapeHtml(n._class)}', ${n._index})">Modifier</button>
+                <button class="gray" onclick="deleteNote('${escapeHtml(n._class)}', ${n._index})">Supprimer</button>` : '<span class="muted">—</span>'}
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
+function renderInterrosTable(){
+    const tbody = document.querySelector("#tableInterros tbody"); tbody.innerHTML = '';
+    let rows=[];
+    if (currentUser && currentUser.role === 'eleve') {
+        Object.keys(classes).forEach(cl=>classes[cl].interros.forEach((r,idx)=>{ if (r.nom === currentUser.name) rows.push({...r,_class:cl,_index:idx}); }));
+    } else if (currentUser && currentUser.role === 'parent') {
+        Object.keys(classes).forEach(cl=>classes[cl].interros.forEach((r,idx)=>{ if (r.nom === currentUser.name) rows.push({...r,_class:cl,_index:idx}); }));
+    } else if (currentUser && currentUser.role === 'enseignant') {
+        let cls = classes[currentUser.class] || {interros:[]};
+        cls.interros.forEach((r,idx)=>{ if (r.matiere === currentUser.subject) rows.push({...r,_class:currentUser.class,_index:idx}); });
+    } else if (currentUser && currentUser.role === 'admin') {
+        Object.keys(classes).forEach(cl=>classes[cl].interros.forEach((r,idx)=>rows.push({...r,_class:cl,_index:idx})));
+    } else { Object.keys(classes).forEach(cl=>classes[cl].interros.forEach((r,idx)=>rows.push({...r,_class:cl,_index:idx}))); }
+
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8"><i>Aucune interrogation enregistrée.</i></td></tr>'; return; }
+    rows.forEach(n=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left;padding-left:8px">${escapeHtml(n.nom)}</td>
+            <td>${escapeHtml(n.matiere)}</td>
+            <td>${escapeHtml(n.noteValue)}</td>
+            <td>${escapeHtml(n.dateSeance)}</td>
+            <td>${escapeHtml(n.heureSeance)}</td>
+            <td>${escapeHtml(n.addedAt)}</td>
+            <td>${escapeHtml(n._class)}</td>
+            <td>${canModify('interros') ? `<button class="gray" onclick="editInterro('${escapeHtml(n._class)}', ${n._index})">Modifier</button>
+                <button class="gray" onclick="deleteInterro('${escapeHtml(n._class)}', ${n._index})">Supprimer</button>` : '<span class="muted">—</span>'}
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
+function renderDevoirsTable(){
+    const tbody = document.querySelector("#tableDevoirs tbody"); tbody.innerHTML = '';
+    let rows=[];
+    if (currentUser && currentUser.role === 'eleve') {
+        Object.keys(classes).forEach(cl=>classes[cl].devoirs.forEach((r,idx)=>{ if (r.nom === currentUser.name) rows.push({...r,_class:cl,_index:idx}); }));
+    } else if (currentUser && currentUser.role === 'parent') {
+        Object.keys(classes).forEach(cl=>classes[cl].devoirs.forEach((r,idx)=>{ if (r.nom === currentUser.name) rows.push({...r,_class:cl,_index:idx}); }));
+    } else if (currentUser && currentUser.role === 'enseignant') {
+        let cls = classes[currentUser.class] || {devoirs:[]};
+        cls.devoirs.forEach((r,idx)=>{ if (r.matiere === currentUser.subject) rows.push({...r,_class:currentUser.class,_index:idx}); });
+    } else if (currentUser && currentUser.role === 'admin') {
+        Object.keys(classes).forEach(cl=>classes[cl].devoirs.forEach((r,idx)=>rows.push({...r,_class:cl,_index:idx})));
+    } else { Object.keys(classes).forEach(cl=>classes[cl].devoirs.forEach((r,idx)=>rows.push({...r,_class:cl,_index:idx}))); }
+
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8"><i>Aucun devoir enregistré.</i></td></tr>'; return; }
+    rows.forEach(n=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left;padding-left:8px">${escapeHtml(n.nom)}</td>
+            <td>${escapeHtml(n.matiere)}</td>
+            <td>${escapeHtml(n.noteValue)}</td>
+            <td>${escapeHtml(n.dateSeance)}</td>
+            <td>${escapeHtml(n.heureSeance)}</td>
+            <td>${escapeHtml(n.addedAt)}</td>
+            <td>${escapeHtml(n._class)}</td>
+            <td>${canModify('devoirs') ? `<button class="gray" onclick="editDevoir('${escapeHtml(n._class)}', ${n._index})">Modifier</button>
+                <button class="gray" onclick="deleteDevoir('${escapeHtml(n._class)}', ${n._index})">Supprimer</button>` : '<span class="muted">—</span>'}
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+/* canModify helper */
+function canModify(type) {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') return true;
+    if (currentUser.role === 'enseignant') {
+        // teacher can modify only their subject (detailed checks also applied in edit/delete)
+        return true;
+    }
+    return false;
+}
+
+/* Gestion page */
+function renderGestionPage(){
+    if (!currentUser || (currentUser.role !== 'enseignant' && currentUser.role !== 'admin')) {
+        alert("Accès refusé. Seuls les enseignants ou administratifs peuvent accéder à la gestion.");
+        switchTab('resume');
+        return;
+    }
+    const gestionMatiere = document.getElementById('gestionMatiere');
+    const gestionClasse = document.getElementById('gestionClasse');
+    gestionMatiere.innerHTML = '';
+    if (currentUser.role === 'enseignant') {
+        gestionMatiere.innerHTML = `<option>${currentUser.subject}</option>`;
+        gestionClasse.value = currentUser.class;
+    } else {
+        ['Maths','Merise','Anglais','Algo & Web','Réseaux tele-informatiques','Droit'].forEach(s => {
+            const opt = document.createElement('option'); opt.value = s; opt.textContent = s; gestionMatiere.appendChild(opt);
+        });
+    }
+    gestionClasse.innerHTML = '';
+    Object.keys(classes).forEach(cl=>{
+        const opt = document.createElement('option'); opt.value = cl; opt.textContent = cl; gestionClasse.appendChild(opt);
+    });
+    document.getElementById('studentsTable').innerHTML = '<p class="muted">Choisis une classe et clique Charger.</p>';
+}
+
+/* loadAttendance */
+function loadAttendance(){
+    if (!currentUser) { alert("Connecte-toi d'abord."); return; }
+    if (currentUser.role !== 'enseignant' && currentUser.role !== 'admin') {
+        alert("Accès refusé.");
+        return;
+    }
+    const date = document.getElementById('gestionDate').value;
+    const hd = document.getElementById('gestionHd').value;
+    const hf = document.getElementById('gestionHf').value;
+    const mat = document.getElementById('gestionMatiere').value;
+    const clsName = document.getElementById('gestionClasse').value;
+
+    if (!date || !hd || !hf) return alert("Choisis date + heures.");
+    if (currentUser.role === 'enseignant' && mat !== currentUser.subject) return alert("Tu ne peux enregistrer une séance que pour ta matière.");
+    const key = `${date}_${hd}-${hf}_${mat}`;
+    const cls = classes[clsName];
+    if (!cls.absences[key]) cls.absences[key]=[];
+    saveLocalAll();
+    renderTableForClass(clsName, key);
+}
+
+/* renderTableForClass */
+function renderTableForClass(clsName, key){
+    const table = document.getElementById('studentsTable');
+    const cls = classes[clsName];
+    let html = `<tr><th>Élève</th><th>Absent</th><th>+</th></tr>`;
+    cls.students.forEach((name,i)=>{
+        const checked = (cls.absences[key]||[]).includes(i+1) ? 'checked':'';
+        html += `<tr>
+            <td style="text-align:left;padding-left:12px">${escapeHtml(name)}</td>
+            <td><input type="checkbox" ${checked} onchange="toggleAbsence('${escapeHtml(clsName)}','${escapeHtml(key)}',${i+1})"></td>
+            <td>${currentUser && (currentUser.role==='enseignant' || currentUser.role==='admin') ? `<button class="small" onclick="promptAddNote('${escapeHtml(clsName)}',${i})">+</button>` : '<span class="muted">—</span>'}</td>
+        </tr>`;
+    });
+    table.innerHTML = html;
+}
+
+/* toggleAbsence */
+function toggleAbsence(clsName,key, id) {
+    if (!currentUser) return alert("Connecte-toi.");
+    if (currentUser.role === 'enseignant') {
+        const keyMat = key.split('_')[2];
+        if (keyMat !== currentUser.subject) return alert("Tu ne peux modifier les absences que pour ta matière.");
+        if (clsName !== currentUser.class) return alert("Tu ne peux modifier que pour ta classe.");
+    } else if (currentUser.role !== 'admin') {
+        return alert("Accès refusé.");
+    }
+    const cls = classes[clsName];
+    if (!cls.absences[key]) cls.absences[key]=[];
+    const arr = cls.absences[key];
+    const pos = arr.indexOf(id);
+    if (pos === -1) arr.push(id); else arr.splice(pos,1);
+    saveLocalAll();
+}
+
+/* markAll */
+function markAll(){
+    const date = document.getElementById('gestionDate').value;
+    const hd = document.getElementById('gestionHd').value;
+    const hf = document.getElementById('gestionHf').value;
+    const mat = document.getElementById('gestionMatiere').value;
+    const clsName = document.getElementById('gestionClasse').value;
+    if (!date||!hd||!hf) return alert("Choisis date + heures.");
+    const key = `${date}_${hd}-${hf}_${mat}`;
+    const cls = classes[clsName];
+    cls.absences[key] = cls.students.map((s,i)=>i+1);
+    saveLocalAll();
+    renderTableForClass(clsName,key);
+}
+
+/* promptAddNote */
+function promptAddNote(clsName, idx) {
+    if (!currentUser) return alert("Connecte-toi.");
+    if (currentUser.role === 'enseignant') {
+        if (clsName !== currentUser.class) return alert("Tu ne peux ajouter que pour ta classe.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    const date = document.getElementById('gestionDate').value;
+    const hd = document.getElementById('gestionHd').value;
+    const hf = document.getElementById('gestionHf').value;
+    const mat = document.getElementById('gestionMatiere').value;
+    if (!date||!hd||!hf) return alert("Choisis séance avant d'ajouter une note.");
+    const note = prompt("Note pour " + classes[clsName].students[idx]);
+    if (note === null || note.trim()==='') return;
+    const now = new Date();
+    const obj = { studentIndex: idx, nom: classes[clsName].students[idx], matiere: mat, dateSeance: date, heureSeance: `${hd}-${hf}`, noteValue: note, addedAt: now.toLocaleString() };
+    classes[clsName].notes.push(obj);
+    saveLocalAll();
+    renderAllTables();
+    alert("Note ajoutée.");
+}
+
+/* edit/delete note/interro/devoir */
+function editNote(className,index){
+    if (!currentUser) return alert("Connecte-toi.");
+    const cls = classes[className];
+    if (!cls || !cls.notes || !cls.notes[index]) return alert("Note introuvable.");
+    const n = cls.notes[index];
+    if (currentUser.role === 'enseignant') {
+        if (currentUser.class !== className) return alert("Tu ne peux modifier que dans ta classe.");
+        if (n.matiere !== currentUser.subject) return alert("Tu ne peux modifier que les notes de ta matière.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    const newM = prompt("Matière:", n.matiere); if (newM===null) return;
+    const newVal = prompt("Note:", n.noteValue); if (newVal===null) return;
+    const newDate = prompt("Date séance (YYYY-MM-DD):", n.dateSeance); if (newDate===null) return;
+    const newHeure = prompt("Heure (début-fin):", n.heureSeance); if (newHeure===null) return;
+    if (newM.trim()!=='') n.matiere = newM.trim();
+    if (newVal.trim()!=='') n.noteValue = newVal.trim();
+    if (newDate.trim()!=='') n.dateSeance = newDate.trim();
+    if (newHeure.trim()!=='') n.heureSeance = newHeure.trim();
+    saveLocalAll(); renderAllTables(); alert("Note modifiée.");
+}
+function deleteNote(className,index){
+    if (!currentUser) return alert("Connecte-toi.");
+    const cls = classes[className];
+    if (!cls || !cls.notes || !cls.notes[index]) return alert("Note introuvable.");
+    const n = cls.notes[index];
+    if (currentUser.role === 'enseignant') {
+        if (currentUser.class !== className) return alert("Tu ne peux supprimer que dans ta classe.");
+        if (n.matiere !== currentUser.subject) return alert("Tu ne peux supprimer que les notes de ta matière.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    if (!confirm("Supprimer définitivement ?")) return;
+    cls.notes.splice(index,1); saveLocalAll(); renderAllTables(); alert("Note supprimée.");
+}
+
+/* Interros edit/delete */
+function editInterro(className,index){
+    if (!currentUser) return alert("Connecte-toi.");
+    const cls = classes[className];
+    if (!cls || !cls.interros || !cls.interros[index]) return alert("Interro introuvable.");
+    const n = cls.interros[index];
+    if (currentUser.role === 'enseignant') {
+        if (currentUser.class !== className) return alert("Tu ne peux modifier que dans ta classe.");
+        if (n.matiere !== currentUser.subject) return alert("Tu ne peux modifier que les interros de ta matière.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    const newM = prompt("Matière:", n.matiere); if (newM===null) return;
+    const newVal = prompt("Note:", n.noteValue); if (newVal===null) return;
+    const newDate = prompt("Date séance (YYYY-MM-DD):", n.dateSeance); if (newDate===null) return;
+    const newHeure = prompt("Heure séance:", n.heureSeance); if (newHeure===null) return;
+    if (newM.trim()!=='') n.matiere = newM.trim();
+    if (newVal.trim()!=='') n.noteValue = newVal.trim();
+    if (newDate.trim()!=='') n.dateSeance = newDate.trim();
+    if (newHeure.trim()!=='') n.heureSeance = newHeure.trim();
+    saveLocalAll(); renderAllTables(); alert("Interrogation modifiée.");
+}
+function deleteInterro(className,index){
+    if (!currentUser) return alert("Connecte-toi.");
+    const cls = classes[className];
+    if (!cls || !cls.interros || !cls.interros[index]) return alert("Interro introuvable.");
+    const n = cls.interros[index];
+    if (currentUser.role === 'enseignant') {
+        if (currentUser.class !== className) return alert("Tu ne peux supprimer que dans ta classe.");
+        if (n.matiere !== currentUser.subject) return alert("Tu ne peux supprimer que les interros de ta matière.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    if (!confirm("Supprimer définitivement ?")) return;
+    cls.interros.splice(index,1); saveLocalAll(); renderAllTables(); alert("Interrogation supprimée.");
+}
+
+/* Devoir edit/delete */
+function editDevoir(className,index){
+    if (!currentUser) return alert("Connecte-toi.");
+    const cls = classes[className];
+    if (!cls || !cls.devoirs || !cls.devoirs[index]) return alert("Devoir introuvable.");
+    const n = cls.devoirs[index];
+    if (currentUser.role === 'enseignant') {
+        if (currentUser.class !== className) return alert("Tu ne peux modifier que dans ta classe.");
+        if (n.matiere !== currentUser.subject) return alert("Tu ne peux modifier que les devoirs de ta matière.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    const newM = prompt("Matière:", n.matiere); if (newM===null) return;
+    const newVal = prompt("Note:", n.noteValue); if (newVal===null) return;
+    const newDate = prompt("Date séance (YYYY-MM-DD):", n.dateSeance); if (newDate===null) return;
+    const newHeure = prompt("Heure séance:", n.heureSeance); if (newHeure===null) return;
+    if (newM.trim()!=='') n.matiere = newM.trim();
+    if (newVal.trim()!=='') n.noteValue = newVal.trim();
+    if (newDate.trim()!=='') n.dateSeance = newDate.trim();
+    if (newHeure.trim()!=='') n.heureSeance = newHeure.trim();
+    saveLocalAll(); renderAllTables(); alert("Devoir modifié.");
+}
+function deleteDevoir(className,index){
+    if (!currentUser) return alert("Connecte-toi.");
+    const cls = classes[className];
+    if (!cls || !cls.devoirs || !cls.devoirs[index]) return alert("Devoir introuvable.");
+    const n = cls.devoirs[index];
+    if (currentUser.role === 'enseignant') {
+        if (currentUser.class !== className) return alert("Tu ne peux supprimer que dans ta classe.");
+        if (n.matiere !== currentUser.subject) return alert("Tu ne peux supprimer que les devoirs de ta matière.");
+    } else if (currentUser.role !== 'admin') return alert("Accès refusé.");
+    if (!confirm("Supprimer définitivement ?")) return;
+    cls.devoirs.splice(index,1); saveLocalAll(); renderAllTables(); alert("Devoir supprimé.");
+}
+
+/* INTERROS: render/add single/all (fixed selection and ids) */
+function renderInterroPage(){
+    if (!currentUser || (currentUser.role !== 'enseignant' && currentUser.role !== 'admin')) {
+        alert("Accès refusé.");
+        switchTab('resume'); return;
+    }
+    const interroPanel = document.getElementById('interroPanel');
+    let subject = (currentUser.role==='enseignant') ? currentUser.subject : document.getElementById('revendSubject').value || 'Maths';
+    let className = (currentUser.role==='enseignant') ? currentUser.class : Object.keys(classes)[0];
+    interroPanel.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="flex:1"><label>Matière</label><input type="text" id="interroMatiere" value="${subject}"></div>
+        <div style="width:160px"><label>Date</label><input type="date" id="interroDate"></div>
+        <div style="width:160px"><label>Heure début</label><input type="time" id="interroHd"></div>
+        <div style="width:160px"><label>Heure fin</label><input type="time" id="interroHf"></div>
+        <div style="width:220px"><label>Classe</label><select id="interroClasse">${Object.keys(classes).map(c=>`<option ${c===className?'selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div style="margin-top:8px"><button onclick="addAllInterro()">Ajouter tous remplis</button> <button class="gray" onclick="renderInterroList()">Rafraîchir</button></div>`;
+    renderInterroList();
+}
+function renderInterroList(){
+    const tbody = document.querySelector("#interroList tbody"); tbody.innerHTML='';
+    const className = document.getElementById('interroClasse') ? document.getElementById('interroClasse').value : (currentUser.class || Object.keys(classes)[0]);
+    const cls = classes[className];
+    cls.students.forEach((name,i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left;padding-left:12px">${escapeHtml(name)}</td>
+            <td><input id="interro_note_${i}" class="small-input" placeholder="Ex: 12/20 ou 14"></td>
+            <td>${(currentUser.role==='enseignant' || currentUser.role==='admin') ? `<button class="gray" onclick="addSingleInterro(${i})">Ajouter</button>` : '<span class="muted">—</span>'}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+function addSingleInterro(i){
+    if (!currentUser) return alert("Connecte-toi.");
+    const mat = document.getElementById('interroMatiere').value.trim();
+    const date = document.getElementById('interroDate').value;
+    const hd = document.getElementById('interroHd').value;
+    const hf = document.getElementById('interroHf').value;
+    const className = document.getElementById('interroClasse').value;
+    if (!date||!hd||!hf) return alert("Choisis date+heures");
+    if (currentUser.role === 'enseignant') {
+        if (mat !== currentUser.subject) return alert("Tu ne peux ajouter que pour ta matière.");
+        if (className !== currentUser.class) return alert("Tu ne peux ajouter que pour ta classe.");
+    }
+    const valEl = document.getElementById(`interro_note_${i}`);
+    if (!valEl) return alert("Champ introuvable.");
+    const val = valEl.value.trim();
+    if (!val) return alert("Entre une note.");
+    const now = new Date();
+    const obj = { studentIndex:i, nom:classes[className].students[i], matiere:mat, dateSeance:date, heureSeance:`${hd}-${hf}`, noteValue:val, addedAt:now.toLocaleString() };
+    classes[className].interros.push(obj);
+    saveLocalAll();
+    renderInterroList(); renderInterrosTable(); alert("Interro ajoutée.");
+}
+function addAllInterro(){
+    if (!currentUser) return alert("Connecte-toi.");
+    const mat = document.getElementById('interroMatiere').value.trim();
+    const date = document.getElementById('interroDate').value;
+    const hd = document.getElementById('interroHd').value;
+    const hf = document.getElementById('interroHf').value;
+    const className = document.getElementById('interroClasse').value;
+    if (!date||!hd||!hf) return alert("Choisis date+heures");
+    if (currentUser.role === 'enseignant') {
+        if (mat !== currentUser.subject) return alert("Tu ne peux ajouter que pour ta matière.");
+        if (className !== currentUser.class) return alert("Tu ne peux ajouter que pour ta classe.");
+    }
+    let count=0; const now = new Date();
+    classes[className].students.forEach((s,i)=>{
+        const el = document.getElementById(`interro_note_${i}`);
+        const val = el ? el.value.trim() : '';
+        if (val) {
+            classes[className].interros.push({ studentIndex:i, nom:s, matiere:mat, dateSeance:date, heureSeance:`${hd}-${hf}`, noteValue:val, addedAt:now.toLocaleString() });
+            if (el) el.value='';
+            count++;
+        }
+    });
+    if (count===0) return alert("Aucune note remplie.");
+    saveLocalAll(); renderInterroList(); renderInterrosTable(); alert(count+" note(s) ajoutée(s).");
+}
+
+/* Devoirs (mirrors interros) */
+function renderDevoirPage(){
+    if (!currentUser || (currentUser.role !== 'enseignant' && currentUser.role !== 'admin')) {
+        alert("Accès refusé.");
+        switchTab('resume'); return;
+    }
+    const p = document.getElementById('devoirPanel');
+    let subject = (currentUser.role==='enseignant') ? currentUser.subject : 'Maths';
+    let className = (currentUser.role==='enseignant') ? currentUser.class : Object.keys(classes)[0];
+    p.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1"><label>Matière</label><input type="text" id="devoirMatiere" value="${subject}"></div>
+      <div style="width:160px"><label>Date</label><input type="date" id="devoirDate"></div>
+      <div style="width:160px"><label>Heure début</label><input type="time" id="devoirHd"></div>
+      <div style="width:160px"><label>Heure fin</label><input type="time" id="devoirHf"></div>
+      <div style="width:220px"><label>Classe</label><select id="devoirClasse">${Object.keys(classes).map(c=>`<option ${c===className?'selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div style="margin-top:8px"><button onclick="addAllDevoir()">Ajouter tous remplis</button> <button class="gray" onclick="renderDevoirList()">Rafraîchir</button></div>`;
+    renderDevoirList();
+}
+function renderDevoirList(){
+    const className = document.getElementById('devoirClasse') ? document.getElementById('devoirClasse').value : (currentUser.class || Object.keys(classes)[0]);
+    const tbody = document.querySelector("#devoirList tbody"); tbody.innerHTML='';
+    classes[className].students.forEach((s,i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left;padding-left:12px">${escapeHtml(s)}</td>
+            <td><input id="devoir_note_${i}" class="small-input"></td>
+            <td>${(currentUser.role==='enseignant' || currentUser.role==='admin')?`<button class="gray" onclick="addSingleDevoir(${i})">Ajouter</button>`:'<span class="muted">—</span>'}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+function addSingleDevoir(i){
+    if (!currentUser) return alert("Connecte-toi.");
+    const mat = document.getElementById('devoirMatiere').value.trim();
+    const date = document.getElementById('devoirDate').value;
+    const hd = document.getElementById('devoirHd').value;
+    const hf = document.getElementById('devoirHf').value;
+    const className = document.getElementById('devoirClasse').value;
+    if (!date||!hd||!hf) return alert("Choisis séance");
+    if (currentUser.role === 'enseignant') {
+        if (mat !== currentUser.subject) return alert("Tu ne peux ajouter que pour ta matière.");
+        if (className !== currentUser.class) return alert("Tu ne peux ajouter que pour ta classe.");
+    }
+    const el = document.getElementById(`devoir_note_${i}`);
+    const val = el ? el.value.trim() : '';
+    if (!val) return alert("Entre une note.");
+    classes[className].devoirs.push({ studentIndex:i, nom:classes[className].students[i], matiere:mat, dateSeance:date, heureSeance:`${hd}-${hf}`, noteValue:val, addedAt:new Date().toLocaleString() });
+    saveLocalAll(); renderDevoirList(); renderDevoirsTable(); alert("Devoir ajouté.");
+}
+function addAllDevoir(){
+    if (!currentUser) return alert("Connecte-toi.");
+    const mat = document.getElementById('devoirMatiere').value.trim();
+    const date = document.getElementById('devoirDate').value;
+    const hd = document.getElementById('devoirHd').value;
+    const hf = document.getElementById('devoirHf').value;
+    const className = document.getElementById('devoirClasse').value;
+    if (!date||!hd||!hf) return alert("Choisis séance");
+    if (currentUser.role === 'enseignant') {
+        if (mat !== currentUser.subject) return alert("Tu ne peux ajouter que pour ta matière.");
+        if (className !== currentUser.class) return alert("Tu ne peux ajouter que pour ta classe.");
+    }
+    let count=0;
+    classes[className].students.forEach((s,i)=>{
+        const el = document.getElementById(`devoir_note_${i}`);
+        const val = el ? el.value.trim() : '';
+        if (val) { classes[className].devoirs.push({ studentIndex:i, nom:s, matiere:mat, dateSeance:date, heureSeance:`${hd}-${hf}`, noteValue:val, addedAt:new Date().toLocaleString() }); count++; if (el) el.value=''; }
+    });
+    if (count===0) return alert("Aucune note remplie.");
+    saveLocalAll(); renderDevoirList(); renderDevoirsTable(); alert(count+" note(s) ajoutée(s).");
+}
+
+/* ====== REVENDICATIONS ====== */
+function submitClaim(subject, className, studentName, studentCode, message) {
+    const now = new Date().toLocaleString();
+    const payload = { subject, className, studentName, studentCode, message, createdAt: now, handled:false };
+    let claims = JSON.parse(localStorage.getItem(CLAIMS_KEY)||'[]');
+    claims.push(payload);
+    localStorage.setItem(CLAIMS_KEY, JSON.stringify(claims));
+    if (firebaseEnabled && db) {
+        try { db.collection('ifsm_app_v1').collection('claims').add(payload).catch(e=>console.warn("push claim",e)); }
+        catch(e){ console.warn("push claim exception", e); }
+    }
+    updateNotifBadge();
+    return payload;
+}
+function getClaims(){
+    try { return JSON.parse(localStorage.getItem(CLAIMS_KEY)||'[]'); } catch(e){return [];}
+}
+
+/* renderRevendArea */
+function renderRevendArea(){
+    const area = document.getElementById('revendArea');
+    area.innerHTML = '';
+    if (currentUser && (currentUser.role==='eleve' || currentUser.role==='parent')) {
+        const selSubj = ['Maths','Merise','Anglais','Algo & Web','Réseaux tele-informatiques','Droit'].map(s=>`<option>${s}</option>`).join('');
+        area.innerHTML = `<div class="card"><h4>Signaler une erreur / faire une réclamation</h4>
+           <label>Matière</label><select id="claimSubject">${selSubj}</select>
+           <label style="margin-top:8px">Message</label><textarea id="claimMessage" rows="4" placeholder="Décris l'erreur..."></textarea>
+           <div style="margin-top:8px"><button onclick="sendClaim()">Envoyer la réclamation</button></div></div>`;
+        const myClaims = getClaims().filter(c => c.studentCode === currentUser.code);
+        area.innerHTML += `<h4 style="margin-top:10px">Mes réclamations</h4>`;
+        if (!myClaims.length) area.innerHTML += '<div class="muted">Tu n\'as envoyé aucune réclamation.</div>';
+        myClaims.forEach(c=>{
+            const d = document.createElement('div'); d.className='claim-card';
+            d.innerHTML = `<div><strong>${escapeHtml(c.subject)}</strong> • ${escapeHtml(c.createdAt)}</div>
+                <div style="margin-top:6px">${escapeHtml(c.message)}</div>`;
+            area.appendChild(d);
+        });
+        return;
+    }
+
+    if (currentUser && currentUser.role === 'enseignant') {
+        const claims = getClaims().filter(c => c.subject === currentUser.subject && c.className === currentUser.class);
+        area.innerHTML = `<h4>Réclamations reçues pour ${currentUser.subject} — classe ${currentUser.class}</h4>`;
+        if (!claims.length) area.innerHTML += '<div class="muted">Aucune réclamation.</div>';
+        claims.forEach((c, i) => {
+            const d = document.createElement('div'); d.className='claim-card';
+            d.innerHTML = `<div><strong>${escapeHtml(c.studentName)}</strong> — <em>${escapeHtml(c.className)}</em> • ${escapeHtml(c.createdAt)}</div>
+                <div style="margin-top:6px">${escapeHtml(c.message)}</div>
+                <div style="margin-top:8px"><button onclick="markClaimHandled(${i})">Marquer traité</button></div>`;
+            area.appendChild(d);
+        });
+        return;
+    }
+
+    if (currentUser && currentUser.role === 'admin') {
+        const claims = getClaims();
+        area.innerHTML = `<h4>Toutes les réclamations (${claims.length})</h4>`;
+        if (!claims.length) area.innerHTML += '<div class="muted">Aucune réclamation.</div>';
+        claims.forEach((c,i) => {
+            const d = document.createElement('div'); d.className='claim-card';
+            d.innerHTML = `<div><strong>${escapeHtml(c.studentName)}</strong> — <em>${escapeHtml(c.className)}</em> • ${escapeHtml(c.createdAt)}</div>
+                <div style="margin-top:6px">${escapeHtml(c.message)}</div>`;
+            area.appendChild(d);
+        });
+        return;
+    }
+
+    area.innerHTML = '<div class="muted">Connecte-toi pour accéder aux réclamations.</div>';
+}
+
+/* sendClaim wrapper */
+function sendClaim() {
+    const subj = document.getElementById('claimSubject').value;
+    const msg = document.getElementById('claimMessage').value.trim();
+    if (!msg) return alert("Décris ta réclamation.");
+    const p = submitClaim(subj, currentUser.class, currentUser.name, currentUser.code, msg);
+    alert("Réclamation envoyée. Le professeur concerné la verra dans son espace.");
+    document.getElementById('claimMessage').value='';
+    renderRevendArea();
+}
+
+/* markClaimHandled */
+function markClaimHandled(idx) {
+    if (!currentUser || currentUser.role !== 'enseignant') return;
+    const claims = getClaims().filter(c => c.subject === currentUser.subject && c.className === currentUser.class);
+    if (!claims[idx]) return;
+    let all = getClaims();
+    const toRemove = claims[idx];
+    const iAll = all.findIndex(c => c.createdAt === toRemove.createdAt && c.studentCode === toRemove.studentCode && c.message === toRemove.message);
+    if (iAll !== -1) { all.splice(iAll,1); localStorage.setItem(CLAIMS_KEY, JSON.stringify(all)); }
+    // Optionally remove from Firestore: best-effort (we don't have doc id). Not implemented to avoid accidental removal.
+    updateNotifBadge();
+    renderRevendArea();
+}
+
+/* updateNotifBadge */
+function updateNotifBadge(){
+    if (!currentUser) notifBadge.style.display='none';
+    else if (currentUser.role === 'enseignant') {
+        const count = getClaims().filter(c => c.subject === currentUser.subject && c.className === currentUser.class).length;
+        notifBadge.textContent = count; notifBadge.style.display = count? 'inline-block' : 'none';
+    } else {
+        notifBadge.style.display='none';
+    }
+}
+
+/* utilities */
+function escapeHtml(str){ if (str===null||str===undefined) return ''; return String(str).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
+function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+/* Logout */
+function doLogout(){
+    currentUser = null;
+    userBadge.style.display='none';
+    loginOpenBtn.style.display='inline-block';
+    appArea.classList.add('hide');
+    landing.classList.remove('hide');
+    saveLocalAll();
+}
+
+/* goBack */
+function goBack(){ window.history.back(); }
+
+/* initial debug listing */
+console.log("Codes élèves (exemple) — tu peux les copier pour tester :", studentCodes);
+loginOpenBtn.addEventListener('dblclick', ()=> {
+    let out = "Codes élèves disponibles (extraits):\n";
+    let keys = Object.keys(studentCodes).slice(0,30);
+    keys.forEach(k=> out += `${k} → ${studentCodes[k].name} (${studentCodes[k].class})\n`);
+    alert(out + "\nAdmin: 1357\nExemple codes profs: " + JSON.stringify(teacherCodes));
+});
+
+/* initial UI */
+document.addEventListener('DOMContentLoaded', ()=>{
+    loginPanel.classList.add('hide');
+    populateClassSelect('gestionClasse');
+    populateClassSelect('teacherClass');
+    populateClassSelect('revendClassFilter');
+    populateClassSelect('resumeClassSelect');
+    renderAllTables();
+});
+</script>
+
+</body>
+</html>
